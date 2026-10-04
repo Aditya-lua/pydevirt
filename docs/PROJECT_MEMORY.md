@@ -24,17 +24,27 @@ _Maintained per Aditya's engineering workflow; update after each project-related
 - Phase 0 — requirements + defaults locked (3.11 primary, pure-Python VM focus,
   sandbox allowed, both source+IR output, z3 optional).
 - Phase 1 — `triage.py`: static fingerprinter, per-version `.pyc` header table,
-  weighted evidence, 5-family classifier. Unit tests 5/5 green.
+  weighted evidence, 5-family classifier. 5/5 tests.
 - Phase 2 — architecture (`docs/ARCHITECTURE.md`): module graph, typed
-  contracts, failure modes, 7 load-bearing decisions.
-- Repo scaffold: README (+ Support/Donate), `.gitignore`, assets.
+  contracts, failure modes, 7 load-bearing decisions. **Approved.**
+- Repo scaffold: README (+ Support/Donate), `.gitignore`, assets. Pushed to
+  `Aditya-lua/pydevirt` (main).
+- Phase 4 foundation:
+  - `core/loader.py` — typed blob reader, per-version `.pyc` headers (4/4).
+  - `core/sandbox.py` — subprocess isolation: rlimits, timeout-kill, net/fs/
+    subprocess deny shims, mutation capture (7/7).
+  - `corpus/` toy VM — ISA (~28 ops), rolling-XOR encoder + encrypted const
+    pool, canonical interpreter loop, standalone-module protector, 7 sample
+    programs with reference oracles (3/3; all samples verified direct + in
+    sandbox + triaged as custom-VM). **19/19 tests total.**
 
 ## Pending
-- Phase 2 architecture sign-off from Aditya (GATE).
-- Push to `Aditya-lua/pydevirt` once the remote repo exists.
-- Phase 3/4 build (bottom-up): `core/loader` → `core/sandbox` → toy-VM corpus →
-  `vm/*` → `ir/*` → `backend/*`, each with a unit test.
-- Phase 5 verification; Phase 6 optimization + anti-analysis review.
+- Phase 4 cont.: `vm/locate` → `vm/handlers` → `vm/semantics` → `vm/opmap` →
+  `vm/decode`; then `ir/*` (lift/cfg/passes), `backend/*` (structurer/pyemit/
+  bcemit), `verify/*`, and `cli.py`.
+- Corpus expansion: exceptions, closures, generators, comprehensions; plus
+  control-flow flattening and opaque-predicate variants (Phase 5/6 needs).
+- Phase 5 verification report; Phase 6 optimization + anti-analysis review.
 
 ## Bugs
 - _(none open)_
@@ -55,5 +65,6 @@ _Maintained per Aditya's engineering workflow; update after each project-related
 
 ## Change Log
 - 2026-10-04 — Scaffolded repo; shipped Phase 0–2 (triage + architecture);
-  added Support/Donate section and Project Memory. Committed as Aditya (one
-  commit), pending remote creation + push.
+  added Support/Donate section and Project Memory. Pushed to main.
+- 2026-10-04 — Phase 4 foundation: core/loader, core/sandbox, and the toy-VM
+  corpus (ISA/encode/interp/protect + 7 programs). Suite at 19/19.
