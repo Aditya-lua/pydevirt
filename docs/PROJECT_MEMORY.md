@@ -38,13 +38,28 @@ _Maintained per Aditya's engineering workflow; update after each project-related
     programs with reference oracles (3/3; all samples verified direct + in
     sandbox + triaged as custom-VM). **19/19 tests total.**
 
+- Phase 4 vertical slice (depth-first): full pipeline on the toy VM.
+  - `vm/locate` (dispatch fn, arms, names, decode exprs, data globals via
+    wrapper call site), `vm/decode` (operand widths from arms, rolling-XOR
+    replay, const decryption, linear disasm), `vm/semantics` (AST classifier →
+    **29/29 opcodes recovered, full confidence** vs known ISA).
+  - `ir/nodes`, `ir/lift` (symbolic stack sim → 3-addr IR, spill-before-store
+    to fix the lost-copy hazard), `ir/cfg` (dominators, natural loops).
+  - `backend/structurer` (post-dominator-guided while/if recovery),
+    `backend/pyemit` (IR→ast→source + compile sanity).
+  - `verify/diffexec` (differential execution in sandbox), `pipeline.py`, `cli.py`.
+  - **4/7 corpus samples verified equivalent end-to-end** (sum_to_n, factorial,
+    abs_val, fib) with clean readable source.
+
 ## Pending
-- Phase 4 cont.: `vm/locate` → `vm/handlers` → `vm/semantics` → `vm/opmap` →
-  `vm/decode`; then `ir/*` (lift/cfg/passes), `backend/*` (structurer/pyemit/
-  bcemit), `verify/*`, and `cli.py`.
+- Broaden to the 3 FOR_ITER (for-loop) samples: needs cross-block stack
+  modeling (the iterator is a loop-carried stack value) → entry-stack
+  propagation across the CFG. Then 7/7.
 - Corpus expansion: exceptions, closures, generators, comprehensions; plus
   control-flow flattening and opaque-predicate variants (Phase 5/6 needs).
-- Phase 5 verification report; Phase 6 optimization + anti-analysis review.
+- `ir/ssa`, `ir/passes/*` (const-fold, DCE, opaque-pred, deflatten), `backend/
+  bcemit`, `verify/fuzz` + `verify/report`.
+- Phase 6 optimization + anti-analysis review; honest known-limitations.
 
 ## Bugs
 - _(none open)_
