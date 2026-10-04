@@ -15,7 +15,7 @@ from __future__ import annotations
 import ast
 
 from ir.cfg import _dominators
-from ir.nodes import Branch, ForIter, Goto, IRFunction, Return
+from ir.nodes import Assign, Branch, ForIter, Goto, IRFunction, IterNext, Return
 
 EXIT = None
 
@@ -41,6 +41,16 @@ def structure(fn: IRFunction, cfg) -> list:
 
     ipost = _postdom(fn, cfg.succs)
     done_headers: set = set()
+
+    # fold each FOR_ITER's "var = next" (the body's first store of the yielded
+    # value) into the loop target, so emission produces `for var in iterable`.
+    for b in fn.blocks.values():
+        if isinstance(b.term, ForIter):
+            body = fn.blocks.get(b.term.body)
+            if body and body.stmts and isinstance(body.stmts[0], Assign) \
+                    and isinstance(body.stmts[0].value, IterNext):
+                b.term.var = body.stmts[0].target
+                body.stmts.pop(0)
 
     def invert(cond):
         return ast.UnaryOp(ast.Not(), cond)
@@ -108,11 +118,10 @@ def structure(fn: IRFunction, cfg) -> list:
         return join
 
     def emit_for(node, term, out):
-        # for <var> in <iterator>:  (iterator was materialized as a Name)
         loop = cfg.loops.get(node, set())
         body = seq(term.body, stop=node)
         target = ast.Name(term.var or "_", ast.Store())
-        out.append(ast.For(target=target, iter=ast.Name(term.iterator, ast.Load()),
+        out.append(ast.For(target=target, iter=expr_to_ast(term.iterable),
                            body=body or [ast.Pass()], orelse=[]))
         return term.exit_ if term.exit_ not in loop else None
 

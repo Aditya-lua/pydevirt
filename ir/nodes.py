@@ -108,11 +108,12 @@ class Return:
 @dataclass
 class ForIter:
     """Loop-top on an iterator: pull next into ``var`` and go to ``body``, or
-    exhaust and go to ``exit_``."""
-    iterator: str
-    var: str
+    exhaust and go to ``exit_``. ``iterable`` is the thing iterated (``iter()``
+    unwrapped); ``var`` is filled by the structurer from the body's first store."""
+    iterable: Expr
     body: int
     exit_: int
+    var: str = ""
 
 
 Terminator = Union[Goto, Branch, Return, ForIter]

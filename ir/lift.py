@@ -61,6 +61,56 @@ def _local_name(i: int) -> str:
     return f"v{i}"
 
 
+_NEXT = IterNext("$next")   # sentinel: the per-iteration value a FOR_ITER yields
+
+
+def _skeleton_succs(decoded: Decoded, opmap, leader_set) -> dict[int, list]:
+    """Successor offsets per block, from control ops only (no stack needed)."""
+    instrs = decoded.instrs
+    index = {ins.offset: k for k, ins in enumerate(instrs)}
+    succ: dict[int, list] = {}
+    for start in sorted(leader_set):
+        k = index[start]
+        last = None
+        while k < len(instrs):
+            ins = instrs[k]
+            if ins.offset != start and ins.offset in leader_set:
+                break
+            last = ins
+            k += 1
+            if opmap[ins.op].op in _CONTROL:
+                break
+        nxt = instrs[k].offset if k < len(instrs) else None
+        sem = opmap[last.op].op
+        if sem is SemOp.JUMP:
+            succ[start] = [last.operands[0]]
+        elif sem in (SemOp.JUMP_IF_FALSE, SemOp.JUMP_IF_TRUE):
+            succ[start] = [last.operands[0], nxt]
+        elif sem is SemOp.FOR_ITER:
+            succ[start] = [nxt, last.operands[0]]  # body (fallthrough), exit
+        elif sem is SemOp.RETURN:
+            succ[start] = []
+        else:
+            succ[start] = [nxt] if nxt is not None else []
+        succ[start] = [s for s in succ[start] if s in leader_set]
+    return succ
+
+
+def _rpo(entry: int, succs: dict[int, list]) -> list:
+    seen, order = set(), []
+
+    def dfs(n):
+        seen.add(n)
+        for s in succs.get(n, []):
+            if s not in seen:
+                dfs(s)
+        order.append(n)
+
+    dfs(entry)
+    order.reverse()
+    return order
+
+
 def _leaders(decoded: Decoded, opmap: dict[int, SemInfo]) -> list[int]:
     offsets = [ins.offset for ins in decoded.instrs]
     by_off = {ins.offset: ins for ins in decoded.instrs}
@@ -104,10 +154,7 @@ def lift(decoded: Decoded, opmap: dict[int, SemInfo], const_values: dict[int, ob
     instrs = decoded.instrs
     index = {ins.offset: k for k, ins in enumerate(instrs)}
 
-    # group instructions into blocks
-    blocks: dict[int, Block] = {}
-    unrecovered: list[str] = []
-    for bi, start in enumerate(leaders):
+    def block_seq(start: int) -> tuple[list, int]:
         k = index[start]
         seq: list[VMInstr] = []
         while k < len(instrs):
@@ -119,18 +166,33 @@ def lift(decoded: Decoded, opmap: dict[int, SemInfo], const_values: dict[int, ob
             if opmap[ins.op].op in _CONTROL:
                 break
         nxt = instrs[k].offset if k < len(instrs) else None
-        blk = _lift_block(seq, opmap, const_values, nxt, unrecovered)
+        return seq, nxt
+
+    skel = _skeleton_succs(decoded, opmap, leader_set)
+    order = _rpo(leaders[0], skel)
+
+    blocks: dict[int, Block] = {}
+    unrecovered: list[str] = []
+    entry_stacks: dict[int, list] = {leaders[0]: []}
+
+    for start in order:
+        seq, nxt = block_seq(start)
+        entry = entry_stacks.get(start, [])
+        blk, succ_out = _lift_block(seq, opmap, const_values, nxt, unrecovered, list(entry))
         blocks[start] = blk
+        for succ, out in succ_out.items():
+            if succ in leader_set and succ not in entry_stacks:
+                entry_stacks[succ] = out
 
     params = _infer_params(decoded, opmap, nlocals)
     return IRFunction(name=name, params=params, blocks=blocks, entry=leaders[0],
                       unrecovered=unrecovered)
 
 
-def _lift_block(seq, opmap, const_values, fallthrough: Optional[int], unrecovered: list) -> Block:
+def _lift_block(seq, opmap, const_values, fallthrough, unrecovered, initial_stack):
     off = seq[0].offset if seq else 0
     blk = Block(offset=off)
-    stack: list = []
+    stack: list = list(initial_stack)
     tmp = [0]
 
     def pop():
@@ -196,26 +258,31 @@ def _lift_block(seq, opmap, const_values, fallthrough: Optional[int], unrecovere
             elif sem is SemOp.GET_ITER:
                 stack.append(Call("iter", (pop(),)))
             elif sem is SemOp.RETURN:
-                blk.term = Return(pop()); return blk
+                blk.term = Return(pop())
+                return blk, {}
             elif sem is SemOp.JUMP:
-                blk.term = Goto(ins.operands[0]); return blk
+                blk.term = Goto(ins.operands[0])
+                return blk, {ins.operands[0]: list(stack)}
             elif sem is SemOp.JUMP_IF_FALSE:
                 cond = pop()
-                blk.term = Branch(cond, true_target=ins.offset + ins.size, false_target=ins.operands[0])
-                return blk
+                ft, tt = ins.operands[0], ins.offset + ins.size
+                blk.term = Branch(cond, true_target=tt, false_target=ft)
+                return blk, {tt: list(stack), ft: list(stack)}
             elif sem is SemOp.JUMP_IF_TRUE:
                 cond = pop()
-                blk.term = Branch(cond, true_target=ins.operands[0], false_target=ins.offset + ins.size)
-                return blk
+                tt, ft = ins.operands[0], ins.offset + ins.size
+                blk.term = Branch(cond, true_target=tt, false_target=ft)
+                return blk, {tt: list(stack), ft: list(stack)}
             elif sem is SemOp.FOR_ITER:
                 it = stack[-1] if stack else Name("_it")
-                it_name = it.id if isinstance(it, Name) else "_it"
-                blk.term = ForIter(iterator=it_name, var="", body=ins.offset + ins.size, exit_=ins.operands[0])
-                return blk
+                iterable = it.args[0] if (isinstance(it, Call) and it.func == "iter" and it.args) else it
+                body, exit_ = ins.offset + ins.size, ins.operands[0]
+                blk.term = ForIter(iterable=iterable, body=body, exit_=exit_)
+                return blk, {body: list(stack) + [_NEXT], exit_: list(stack)[:-1]}
             else:
                 unrecovered.append(f"# UNRECOVERED: opcode {ins.op} @ pc {ins.offset} (evidence: {info.evidence})")
         except LiftError as e:
             unrecovered.append(f"# UNRECOVERED: {e} (opcode {ins.op} sem {sem.value})")
 
     blk.term = Goto(fallthrough) if fallthrough is not None else Return(Const(None))
-    return blk
+    return blk, ({fallthrough: list(stack)} if fallthrough is not None else {})

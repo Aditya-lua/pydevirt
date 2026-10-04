@@ -32,9 +32,12 @@ Built phase by phase (design-gated). Shipped so far:
 - [x] **Phase 0** — requirements, defaults
 - [x] **Phase 1** — triage & threat model + `triage.py` (static, no-exec fingerprinter)
 - [x] **Phase 2** — architecture (see `docs/ARCHITECTURE.md`)
-- [ ] **Phase 3/4** — core + VM + IR + backend implementation
-- [ ] **Phase 5** — differential-execution verification + toy-VM corpus
-- [ ] **Phase 6** — optimization & anti-analysis hardening review
+- [x] **Phase 3/4** — full pipeline: `locate → decode → semantics → lift → cfg → structure → emit`
+- [x] **Phase 5 (core)** — differential-execution verification; **7/7 toy-VM corpus samples recovered to readable, equivalent Python**
+- [ ] **Phase 5+** — corpus expansion (exceptions, closures, generators, comprehensions; CF-flattening, opaque predicates)
+- [ ] **Phase 6** — IR optimization passes, SSA, bytecode emit fallback, anti-analysis review
+
+Run `python cli.py selftest` to recover and verify the whole corpus.
 
 ## Layout (target)
 

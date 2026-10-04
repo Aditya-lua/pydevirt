@@ -39,7 +39,7 @@ def expr_to_ast(e) -> ast.expr:
     if isinstance(e, N.ListLit):
         return ast.List([expr_to_ast(x) for x in e.elts], ast.Load())
     if isinstance(e, N.IterNext):
-        return ast.Name(e.iterator, ast.Load())
+        return ast.Name("_next", ast.Load())  # should be folded into a for-target
     raise TypeError(f"cannot emit expr {e!r}")
 
 

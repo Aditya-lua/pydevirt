@@ -48,13 +48,12 @@ _Maintained per Aditya's engineering workflow; update after each project-related
   - `backend/structurer` (post-dominator-guided while/if recovery),
     `backend/pyemit` (IR→ast→source + compile sanity).
   - `verify/diffexec` (differential execution in sandbox), `pipeline.py`, `cli.py`.
-  - **4/7 corpus samples verified equivalent end-to-end** (sum_to_n, factorial,
-    abs_val, fib) with clean readable source.
+  - **7/7 corpus samples verified equivalent end-to-end** with clean readable
+    source. For-loops handled via CFG-skeleton-first lifting + entry-stack
+    propagation in RPO (the iterator is a loop-carried stack value); FOR_ITER's
+    "var = next" store is folded into the `for` target by the structurer.
 
 ## Pending
-- Broaden to the 3 FOR_ITER (for-loop) samples: needs cross-block stack
-  modeling (the iterator is a loop-carried stack value) → entry-stack
-  propagation across the CFG. Then 7/7.
 - Corpus expansion: exceptions, closures, generators, comprehensions; plus
   control-flow flattening and opaque-predicate variants (Phase 5/6 needs).
 - `ir/ssa`, `ir/passes/*` (const-fold, DCE, opaque-pred, deflatten), `backend/
@@ -83,3 +82,6 @@ _Maintained per Aditya's engineering workflow; update after each project-related
   added Support/Donate section and Project Memory. Pushed to main.
 - 2026-10-04 — Phase 4 foundation: core/loader, core/sandbox, and the toy-VM
   corpus (ISA/encode/interp/protect + 7 programs). Suite at 19/19.
+- 2026-10-04 — Phase 4 vertical slice: full locate→decode→semantics→lift→cfg→
+  structure→emit→verify pipeline + CLI. 7/7 corpus samples recovered to
+  readable Python and verified equivalent.

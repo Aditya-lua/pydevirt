@@ -1,9 +1,7 @@
 """End-to-end pipeline tests: opcode-map recovery + differential verification.
 
-The depth-first slice guarantees the while/if/return samples recover to source
-that verifies equivalent. For-loop (FOR_ITER) samples are a known pending
-broadening step (cross-block stack), asserted here as 'not yet' so a regression
-in the working set is caught without pretending the pending ones pass.
+All 7 corpus samples recover to readable Python that verifies equivalent to the
+original under differential execution (while/if/return and for-loops).
 """
 
 from __future__ import annotations
@@ -19,7 +17,8 @@ from corpus.toyvm.protect import emit_module  # noqa: E402
 from pipeline import devirtualize  # noqa: E402
 from verify.diffexec import differential  # noqa: E402
 
-VERIFYING = ["sum_to_n", "factorial", "abs_val", "fib"]
+VERIFYING = ["sum_to_n", "factorial", "abs_val", "fib",
+             "max_list", "count_evens", "sum_squares"]
 
 _EXPECT = {
     'NOP': 'NOP', 'LOAD_CONST': 'PUSH_CONST', 'LOAD_LOCAL': 'PUSH_LOCAL',
