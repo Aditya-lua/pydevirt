@@ -61,7 +61,23 @@ _Maintained per Aditya's engineering workflow; update after each project-related
 - Phase 6 optimization + anti-analysis review; honest known-limitations.
 
 ## Bugs
-- _(none open)_
+- _(none open in-repo)_
+- Field note (class-D, `wuyx.so`, Termux/aarch64, CPython 3.14): the on-device
+  `PyMarshal_ReadObjectFromString` LD_PRELOAD capture produced **no dumps**.
+  Root cause (not a bug in the hook): the module aborts in its *native* init
+  with `RuntimeError: integrity check failed`. The traceback bottoms out at
+  `module_from_spec → ExtensionFileLoader.create_module → _imp.create_dynamic`,
+  i.e. inside `PyInit_wuyx`, which runs **before** the payload is unmarshalled —
+  so the marshal chokepoint (correct in principle) sits downstream of an
+  anti-tamper gate and never fires. Confirms the architecture caveat: for D,
+  the capture chokepoint must be reached, so an anti-tamper gate in `PyInit`
+  has to be diagnosed/neutralized first. Field script reworked to (a) a RECON
+  pass logging every channel the gate touches between arm and abort
+  (distinguishes LD_PRELOAD-detection from intrinsic name/`__file__`/self-CRC/
+  device binding) and (b) hardening of the common detectors (getenv/
+  secure_getenv, in-memory environ scrub, sanitized `/proc/self/{maps,environ}`,
+  `dl_iterate_phdr` filter, `PTRACE_TRACEME` stub). Still safe-exits under
+  WUYX_SAFE=1. Next step gated on the device recon log.
 - Fixed: test `.pyc` header literal was double-escaped (`b"\\x00"` = 4 bytes),
   making `marshal` read the wrong offset → `code=None`. Fix: build the 16-byte
   header with `bytes(12)`. Root cause was in the test, not `triage.py`.
